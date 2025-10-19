@@ -1,7 +1,5 @@
 #include <wrapped_facade_headers/Python.hpp>
 
-#include <log_surgeon_ffi/PyLogEvent.hpp>
-
 #include "PyReaderParser.hpp"
 
 namespace {

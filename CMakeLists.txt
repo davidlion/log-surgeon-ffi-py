@@ -55,10 +55,8 @@ target_sources(
     log_surgeon_ffi
     PRIVATE
         "${log_surgeon_ffi_SRC_DIR}/api_decoration.hpp"
-        "${log_surgeon_ffi_SRC_DIR}/module.cpp"
+        "${log_surgeon_ffi_SRC_DIR}/log_surgeon_ffi.cpp"
         "${log_surgeon_ffi_SRC_DIR}/PyExceptionContext.hpp"
-        "${log_surgeon_ffi_SRC_DIR}/PyLogEvent.cpp"
-        "${log_surgeon_ffi_SRC_DIR}/PyLogEvent.hpp"
         "${log_surgeon_ffi_SRC_DIR}/PyObjectCast.hpp"
         "${log_surgeon_ffi_SRC_DIR}/PyObjectUtils.hpp"
         "${log_surgeon_ffi_SRC_DIR}/PyReaderParser.cpp"
@@ -82,6 +80,6 @@ target_link_libraries(log_surgeon_ffi PRIVATE log_surgeon::log_surgeon)
 
 target_compile_features(log_surgeon_ffi PRIVATE cxx_std_20)
 
-if(${SKBUILD})
+if(SKBUILD)
     install(TARGETS log_surgeon_ffi DESTINATION "build/install") # TODO FIXME
 endif()
