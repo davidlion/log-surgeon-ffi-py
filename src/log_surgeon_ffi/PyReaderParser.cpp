@@ -288,8 +288,8 @@ auto PyReaderParser::init(PyObject* py_input_stream, char const* schema_content)
                         return log_surgeon::ErrorCode::Errno;
                     }
                 } else if (PyUnicode_Check(py_data)) {
-                    PyObject* py_bytes = PyUnicode_AsEncodedString(py_data, "utf-8", "strict");
-                    if (!py_bytes) {
+                    PyObject* py_bytes{PyUnicode_AsEncodedString(py_data, "utf-8", "strict")};
+                    if (nullptr == py_bytes) {
                         Py_DECREF(py_data);
                         return log_surgeon::ErrorCode::Errno;
                     }
@@ -307,11 +307,9 @@ auto PyReaderParser::init(PyObject* py_input_stream, char const* schema_content)
                     );
                     return log_surgeon::ErrorCode::Errno;
                 }
-
                 read_to = static_cast<size_t>(size);
 
                 std::span<char> const py_span{py_buf, read_to};
-
                 std::copy(py_span.begin(), py_span.end(), buf);
                 Py_DECREF(py_buf);
 
@@ -323,10 +321,10 @@ auto PyReaderParser::init(PyObject* py_input_stream, char const* schema_content)
                     return log_surgeon::ErrorCode::EndOfFile;
                 }
 
-                if (read_to < count) {
-                    return log_surgeon::ErrorCode::Truncated;
-                }
-
+                // TODO: double check what to do if the read was truncated
+                // if (read_to < count) {
+                //     return log_surgeon::ErrorCode::Truncated;
+                // }
                 return log_surgeon::ErrorCode::Success;
             }
     };
@@ -366,12 +364,12 @@ auto PyReaderParser::done() -> bool {
 }
 
 auto PyReaderParser::parse_next_log_event() -> PyObject* {
-    std::cerr << "parse_next_log_event: start" << "\n";
     if (done()) {
         return Py_None;
     }
 
     if (log_surgeon::ErrorCode::Success != m_parser->parse_next_event()) {
+        std::cerr << "log surgeon failed\n";
         // TODO: throw
         return Py_None;
     }
