@@ -124,7 +124,7 @@ private:
     //         -> clp::ffi::ir_stream::IRErrorCode;
 
     PyObject_HEAD;
-    PyObject* m_input_stream{nullptr};
+    PyObject* m_py_input_stream{nullptr};
     std::unique_ptr<log_surgeon::ReaderParser> m_parser;
 };
 }  // namespace log_surgeon_ffi

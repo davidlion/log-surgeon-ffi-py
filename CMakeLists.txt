@@ -81,5 +81,5 @@ target_link_libraries(log_surgeon_ffi PRIVATE log_surgeon::log_surgeon)
 target_compile_features(log_surgeon_ffi PRIVATE cxx_std_20)
 
 if(SKBUILD)
-    install(TARGETS log_surgeon_ffi DESTINATION "build/install") # TODO FIXME
+    install(TARGETS log_surgeon_ffi LIBRARY DESTINATION ".")
 endif()

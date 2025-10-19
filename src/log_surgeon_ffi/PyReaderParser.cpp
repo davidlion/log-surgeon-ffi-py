@@ -147,7 +147,7 @@ PyType_Slot PyReaderParser_slots[]{
  */
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 PyType_Spec PyReaderParser_type_spec{
-        "log_surgeon_ffi.ir.native.Deserializer",
+        "log_surgeon_ffi.ReaderParser",
         sizeof(PyReaderParser),
         0,
         Py_TPFLAGS_DEFAULT,
@@ -165,9 +165,9 @@ PyReaderParser_init(PyReaderParser* self, PyObject* args, PyObject* keywords) ->
     };
 
     // TODO: is this really necessary? Ask Adrian/Zhihao.
-    // m_input_stream = nullptr;
+    // self->m_input_stream = nullptr; // need to set with public method
 
-    PyObject* input_stream{};
+    PyObject* py_input_stream{};
     char const* schema_contents{};
     if (false
         == static_cast<bool>(PyArg_ParseTupleAndKeywords(
@@ -175,14 +175,14 @@ PyReaderParser_init(PyReaderParser* self, PyObject* args, PyObject* keywords) ->
                 keywords,
                 "Os",
                 const_cast<char**>(static_cast<char const**>(keyword_table)),
-                &input_stream,
+                &py_input_stream,
                 &schema_contents
         )))
     {
         return -1;
     }
 
-    if (false == self->init(input_stream, schema_contents)) {
+    if (false == self->init(py_input_stream, schema_contents)) {
         return -1;
     }
 
@@ -250,34 +250,61 @@ auto PyReaderParser::module_level_init(PyObject* py_module) -> bool {
     return add_python_type(get_py_type(), "ReaderParser", py_module);
 }
 
-auto PyReaderParser::init(PyObject* input_stream, char const* schema_content) -> bool {
-    // TODO FIXME try catch + throw a py exception
+auto PyReaderParser::init(PyObject* py_input_stream, char const* schema_content) -> bool {
+    // TODO use try catch + throw a py exception around log surgeon code
+    // TODO review PyErr and exceptions on returns
+
     auto schema{log_surgeon::SchemaParser::try_schema_string(schema_content)};
     auto parser{std::make_unique<log_surgeon::ReaderParser>(std::move(schema))};
 
-    m_input_stream = input_stream;
-    Py_INCREF(m_input_stream);
+    if (0 == PyObject_HasAttrString(py_input_stream, "read")) {
+        PyErr_SetString(PyExc_TypeError, "input_stream must have a .read() method");
+        return false;
+    }
+
+    m_py_input_stream = py_input_stream;
+    Py_INCREF(py_input_stream);
 
     log_surgeon::Reader reader{
             [&](char* buf, size_t count, size_t& read_to) -> log_surgeon::ErrorCode {
-                // TODO FIXME try catch + throw a py exception
-                PyObject* bytes = PyObject_CallMethod(
-                        m_input_stream,
+                PyObject* py_data{PyObject_CallMethod(
+                        m_py_input_stream,
                         "read",
                         "n",
                         static_cast<Py_ssize_t>(count)
-                );
-
-                if (bytes == nullptr) {
+                )};
+                if (py_data == nullptr) {
                     return log_surgeon::ErrorCode::Errno;
                 }
 
                 char* py_buf{};
                 Py_ssize_t size{};
-                if (0 != PyBytes_AsStringAndSize(bytes, &py_buf, &size)) {
-                    Py_DECREF(bytes);
+                if (PyBytes_Check(py_data)) {
+                    if (0 != PyBytes_AsStringAndSize(py_data, &py_buf, &size)) {
+                        Py_DECREF(py_data);
+                        return log_surgeon::ErrorCode::Errno;
+                    }
+                } else if (PyUnicode_Check(py_data)) {
+                    PyObject* py_bytes = PyUnicode_AsEncodedString(py_data, "utf-8", "strict");
+                    if (!py_bytes) {
+                        Py_DECREF(py_data);
+                        return log_surgeon::ErrorCode::Errno;
+                    }
+                    if (0 != PyBytes_AsStringAndSize(py_bytes, &py_buf, &size)) {
+                        Py_DECREF(py_bytes);
+                        Py_DECREF(py_data);
+                        return log_surgeon::ErrorCode::Errno;
+                    }
+                    Py_DECREF(py_bytes);
+                } else {
+                    Py_DECREF(py_data);
+                    PyErr_SetString(
+                            PyExc_TypeError,
+                            "input_stream.read() must return bytes or str"
+                    );
                     return log_surgeon::ErrorCode::Errno;
                 }
+
                 read_to = static_cast<size_t>(size);
 
                 std::span<char> const py_span{py_buf, read_to};
@@ -348,7 +375,7 @@ auto PyReaderParser::parse_next_log_event() -> PyObject* {
     auto const& log_parser{m_parser->get_log_parser()};
     auto const& event{log_parser.get_log_event_view()};
 
-    PyObject* py_log_event_module = PyImport_ImportModule("log_event");
+    PyObject* py_log_event_module = PyImport_ImportModule("log_surgeon.log_event");
     if (nullptr == py_log_event_module) {
         return Py_None;
     }
