@@ -521,7 +521,7 @@ auto PyReaderParser::parse_next_log_event() -> PyObject* {
 
                     auto capture_name{lexer.m_id_symbol.at(capture_id)};
                     PyObject* py_capture_name{PyUnicode_FromString(capture_name.c_str())};
-                    if (nullptr != py_capture_name) {
+                    if (nullptr == py_capture_name) {
                         return Py_None;
                     }
                     PyObject* py_capture_array{nullptr};
