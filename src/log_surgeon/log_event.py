@@ -2,8 +2,8 @@ class LogEvent:
     """ """
 
     def __init__(self) -> None:
-        _log_message: str = ""
-        _var_dict: dict[str, str | list[str | int | float]] = []
+        self._log_message: str = ""
+        self._var_dict: dict[str, str | list[str | int | float]] = {}
 
     def get_log_message(self) -> str:
         return _log_message

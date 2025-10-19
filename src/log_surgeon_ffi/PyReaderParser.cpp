@@ -402,7 +402,7 @@ auto PyReaderParser::parse_next_log_event() -> PyObject* {
         return Py_None;
     }
 
-    PyObject* py_var_dict = PyObject_GetAttrString(py_log_event, "_var_dict");
+    PyObject* py_var_dict{PyObject_GetAttrString(py_log_event, "_var_dict")};
     if (nullptr == py_var_dict) {
         Py_DECREF(py_log_event);
         Py_DECREF(py_log_msg);
@@ -433,17 +433,21 @@ auto PyReaderParser::parse_next_log_event() -> PyObject* {
         }
 
         auto const token_name{log_parser.get_id_symbol(token_type)};
+        PyObject* py_token_name{PyUnicode_FromString(token_name.c_str())};
+        if (nullptr != py_token_name) {
+            return Py_None;
+        }
         PyObject* py_token_array{nullptr};
-        auto contains_token_result{PyDict_ContainsString(py_var_dict, token_name.c_str())};
+        auto contains_token_result{PyDict_Contains(py_var_dict, py_token_name)};
         if (-1 == contains_token_result) {
             // TODO: throw
             return Py_None;
         }
         if (1 == contains_token_result) {
-            py_token_array = PyDict_GetItemString(py_var_dict, token_name.c_str());
+            py_token_array = PyDict_GetItem(py_var_dict, py_token_name);
         } else {
             py_token_array = PyList_New(0);
-            if (-1 == PyDict_SetItemString(py_var_dict, token_name.c_str(), py_token_array)) {
+            if (-1 == PyDict_SetItem(py_var_dict, py_token_name, py_token_array)) {
                 // TODO: throw
                 return Py_None;
             }
@@ -506,25 +510,21 @@ auto PyReaderParser::parse_next_log_event() -> PyObject* {
                     auto const end_positions{token_view.get_reversed_reg_positions(end_reg_id)};
 
                     auto capture_name{lexer.m_id_symbol.at(capture_id)};
+                    PyObject* py_capture_name{PyUnicode_FromString(capture_name.c_str())};
+                    if (nullptr != py_capture_name) {
+                        return Py_None;
+                    }
                     PyObject* py_capture_array{nullptr};
-                    auto contains_capture_result{
-                            PyDict_ContainsString(py_var_dict, capture_name.c_str())
-                    };
+                    auto contains_capture_result{PyDict_Contains(py_var_dict, py_capture_name)};
                     if (-1 == contains_capture_result) {
                         // TODO: throw
                         return Py_None;
                     }
                     if (1 == contains_capture_result) {
-                        py_capture_array = PyDict_GetItemString(py_var_dict, capture_name.c_str());
+                        py_capture_array = PyDict_GetItem(py_var_dict, py_capture_name);
                     } else {
                         py_capture_array = PyList_New(0);
-                        if (-1
-                            == PyDict_SetItemString(
-                                    py_var_dict,
-                                    capture_name.c_str(),
-                                    py_capture_array
-                            ))
-                        {
+                        if (-1 == PyDict_SetItem(py_var_dict, py_capture_name, py_capture_array)) {
                             // TODO: throw
                             return Py_None;
                         }
