@@ -55,7 +55,6 @@ target_sources(
     log_surgeon_ffi
     PRIVATE
         "${log_surgeon_ffi_SRC_DIR}/api_decoration.hpp"
-        "${log_surgeon_ffi_SRC_DIR}/LogEvent.hpp"
         "${log_surgeon_ffi_SRC_DIR}/module.cpp"
         "${log_surgeon_ffi_SRC_DIR}/PyExceptionContext.hpp"
         "${log_surgeon_ffi_SRC_DIR}/PyLogEvent.cpp"
