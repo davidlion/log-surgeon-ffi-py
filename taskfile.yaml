@@ -1,0 +1,32 @@
+version: "3"
+
+set: ["u", "pipefail"]
+shopt: ["globstar"]
+
+includes:
+  deps: "taskfiles/deps.yaml"
+  lint: "taskfiles/lint.yaml"
+  log-surgeon: "taskfiles/log-surgeon.yaml"
+  log-surgeon-ffi: "taskfiles/log-surgeon-ffi.yaml"
+  # test: "taskfiles/test.yaml"
+
+vars:
+  # General variables
+  # This must match the package name in CMakeLists.txt.
+  G_CMAKE_PACKAGE_NAME: "log_surgeon_ffi"
+
+  # Build directories
+  G_BUILD_DIR: "{{.ROOT_DIR}}/build"
+  G_LOG_SURGEON_FFI_BUILD_DIR: "{{.G_BUILD_DIR}}/{{.G_CMAKE_PACKAGE_NAME}}"
+  G_LOG_SURGEON_FFI_DEBUG_BUILD_DIR: "{{.G_LOG_SURGEON_FFI_BUILD_DIR}}/debug"
+  G_LOG_SURGEON_FFI_RELEASE_BUILD_DIR: "{{.G_LOG_SURGEON_FFI_BUILD_DIR}}/release"
+
+tasks:
+  clean:
+    cmd: "rm -rf '{{.G_BUILD_DIR}}'"
+
+  init:
+    internal: true
+    silent: true
+    run: "once"
+    cmd: "mkdir -p '{{.G_BUILD_DIR}}'"

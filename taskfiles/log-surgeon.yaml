@@ -1,0 +1,21 @@
+version: "3"
+
+includes:
+  deps:
+    internal: true
+    taskfile: "deps.yaml"
+  utils:
+    internal: true
+    taskfile: "../tools/yscope-dev-utils/exports/taskfiles/utils/utils.yaml"
+
+vars:
+  G_WHEEL_BUILD_DIR: "{{.G_BUILD_DIR}}/dist"
+
+tasks:
+  build-wheel:
+    deps:
+      - "deps:install-all"
+    cmd: "uv build --wheel -o '{{.G_WHEEL_BUILD_DIR}}'"
+
+  clean-wheel:
+    cmd: "rm -rf '{{.G_WHEEL_BUILD_DIR}}'"

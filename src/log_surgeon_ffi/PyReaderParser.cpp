@@ -1,0 +1,571 @@
+#include <wrapped_facade_headers/Python.hpp>
+
+#include "PyReaderParser.hpp"
+
+#include <object.h>
+
+#include <algorithm>
+#include <log_surgeon/Constants.hpp>
+#include <log_surgeon/Reader.hpp>
+#include <log_surgeon/ReaderParser.hpp>
+#include <log_surgeon/SchemaParser.hpp>
+#include <log_surgeon_ffi/api_decoration.hpp>
+#include <log_surgeon_ffi/PyObjectCast.hpp>
+#include <log_surgeon_ffi/PyObjectUtils.hpp>
+#include <log_surgeon_ffi/utils.hpp>
+#include <memory>
+#include <span>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+
+namespace log_surgeon_ffi {
+namespace {
+/**
+ * Callback of `PyReaderParser`'s `__init__` method:
+ */
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays)
+PyDoc_STRVAR(
+        cPyReaderParserDoc,
+        "Deserializer for deserializing CLP key-value pair IR streams.\n"
+        "This class deserializes a CLP key-value pair IR stream into log "
+        "events.\n\n"
+        "__init__(self, input_stream, buffer_capacity=65536, "
+        "allow_incomplete_stream=False)\n\n"
+        "Initializes a :class:`Deserializer` instance with the given inputs. Note "
+        "that each"
+        " object should only be initialized once. Double initialization will "
+        "result in a memory"
+        " leak.\n\n"
+        ":param input_stream: Serialized CLP IR stream.\n"
+        ":type input_stream: IO[bytes]\n"
+        ":param buffer_capacity: The capacity of the underlying read buffer.\n"
+        ":type buffer_capacity: int\n"
+        ":param allow_incomplete_stream: If set to `True`, an incomplete CLP IR "
+        "stream is not"
+        " treated as an error.\n"
+        ":type allow_incomplete_stream: bool\n"
+);
+LOG_SURGEON_FFI_METHOD auto
+PyReaderParser_init(PyReaderParser* self, PyObject* args, PyObject* keywords) -> int;
+
+/**
+ * Callback of `PyReaderParser`'s `done`.
+ */
+PyDoc_STRVAR(
+        cPyReaderParserDoneDoc,
+        "done(self)\n"
+        "--\n\n"
+        "Deserializes the next log event from the IR stream.\n\n"
+        ":return:\n"
+        "     - The next deserialized log event from the IR stream.\n"
+        "     - None if there are no more log events in the stream.\n"
+        ":rtype: :class:`KeyValuePairLogEvent` | None\n"
+        ":raises: Appropriate exceptions with detailed information on any "
+        "encountered failure.\n"
+);
+LOG_SURGEON_FFI_METHOD auto PyReaderParser_done(PyReaderParser* self) -> PyObject*;
+
+/**
+ * Callback of `PyReaderParser`'s `parse_next_log_event`.
+ */
+PyDoc_STRVAR(
+        cPyReaderParserParseNextLogEventDoc,
+        "parse_next_log_event(self)\n"
+        "--\n\n"
+        "Deserializes the next log event from the IR stream.\n\n"
+        ":return:\n"
+        "     - The next deserialized log event from the IR stream.\n"
+        "     - None if there are no more log events in the stream.\n"
+        ":rtype: :class:`KeyValuePairLogEvent` | None\n"
+        ":raises: Appropriate exceptions with detailed information on any "
+        "encountered failure.\n"
+);
+LOG_SURGEON_FFI_METHOD auto PyReaderParser_parse_next_log_event(PyReaderParser* self) -> PyObject*;
+
+/**
+ * Callback of `PyReaderParser`'s `get_user_defined_metadata`.
+ */
+PyDoc_STRVAR(
+        cPyReaderParserGetUserDefinedMetadataDoc,
+        "get_user_defined_metadata(self)\n"
+        "--\n\n"
+        "Gets the user-defined stream-level metadata.\n\n"
+        ":return:\n"
+        "    - The deserialized user-defined stream-level metadata, loaded as a"
+        " dictionary.\n"
+        "    - None if user-defined stream-level metadata was not given in the "
+        "deserialized"
+        " IR stream.\n"
+        ":rtype: dict | None\n"
+);
+LOG_SURGEON_FFI_METHOD auto PyReaderParser_get_user_defined_metadata(PyReaderParser* self)
+        -> PyObject*;
+
+/**
+ * Callback of `PyReaderParser`'s deallocator.
+ */
+LOG_SURGEON_FFI_METHOD auto PyReaderParser_dealloc(PyReaderParser* self) -> void;
+
+// NOLINTNEXTLINE(*-avoid-c-arrays,
+// cppcoreguidelines-avoid-non-const-global-variables)
+PyMethodDef PyReaderParser_method_table[]{
+        {"done",
+         py_c_function_cast(PyReaderParser_done),
+         METH_NOARGS,
+         static_cast<char const*>(cPyReaderParserDoneDoc)},
+
+        {"parse_next_log_event",
+         py_c_function_cast(PyReaderParser_parse_next_log_event),
+         METH_NOARGS,
+         static_cast<char const*>(cPyReaderParserParseNextLogEventDoc)},
+
+        // {"get_user_defined_metadata",
+        //  py_c_function_cast(PyReaderParser_get_user_defined_metadata),
+        //  METH_NOARGS,
+        //  static_cast<char const*>(cPyReaderParserGetUserDefinedMetadataDoc)},
+
+        {nullptr}
+};
+
+// NOLINTBEGIN(cppcoreguidelines-pro-type-*-cast)
+// NOLINTNEXTLINE(*-avoid-c-arrays, cppcoreguidelines-avoid-non-const-global-variables)
+PyType_Slot PyReaderParser_slots[]{
+        {Py_tp_alloc, reinterpret_cast<void*>(PyType_GenericAlloc)},
+        {Py_tp_dealloc, reinterpret_cast<void*>(PyReaderParser_dealloc)},
+        {Py_tp_new, reinterpret_cast<void*>(PyType_GenericNew)},
+        {Py_tp_init, reinterpret_cast<void*>(PyReaderParser_init)},
+        {Py_tp_methods, static_cast<void*>(PyReaderParser_method_table)},
+        {Py_tp_doc, const_cast<void*>(static_cast<void const*>(cPyReaderParserDoc))},
+        {0, nullptr}
+};
+// NOLINTEND(cppcoreguidelines-pro-type-*-cast)
+
+/**
+ * `PyReaderParser`'s Python type specifications.
+ */
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+PyType_Spec PyReaderParser_type_spec{
+        "log_surgeon_ffi.ir.native.Deserializer",
+        sizeof(PyReaderParser),
+        0,
+        Py_TPFLAGS_DEFAULT,
+        static_cast<PyType_Slot*>(PyReaderParser_slots)
+};
+
+LOG_SURGEON_FFI_METHOD auto
+PyReaderParser_init(PyReaderParser* self, PyObject* args, PyObject* keywords) -> int {
+    static char keyword_input_stream[]{"input_stream"};
+    static char keyword_schema_str[]{"schema_contents"};
+    static char const* keyword_table[]{
+            static_cast<char*>(keyword_input_stream),
+            static_cast<char*>(keyword_schema_str),
+            nullptr
+    };
+
+    // TODO: is this really necessary? Ask Adrian/Zhihao.
+    // m_input_stream = nullptr;
+
+    PyObject* input_stream{};
+    char const* schema_contents{};
+    if (false
+        == static_cast<bool>(PyArg_ParseTupleAndKeywords(
+                args,
+                keywords,
+                "Os",
+                const_cast<char**>(static_cast<char const**>(keyword_table)),
+                &input_stream,
+                &schema_contents
+        )))
+    {
+        return -1;
+    }
+
+    if (false == self->init(input_stream, schema_contents)) {
+        return -1;
+    }
+
+    return 0;
+}
+
+LOG_SURGEON_FFI_METHOD auto PyReaderParser_done(PyReaderParser* self) -> PyObject* {
+    return self->done() ? PyBool_FromLong(1) : PyBool_FromLong(0);
+}
+
+LOG_SURGEON_FFI_METHOD auto PyReaderParser_parse_next_log_event(PyReaderParser* self) -> PyObject* {
+    return self->parse_next_log_event();
+}
+
+// LOG_SURGEON_FFI_METHOD auto PyReaderParser_get_user_defined_metadata(PyReaderParser* self)
+//         -> PyObject* {
+//     auto const* user_defined_metadata{self->get_user_defined_metadata()};
+//     if (nullptr == user_defined_metadata) {
+//         Py_RETURN_NONE;
+//     }
+
+//     std::string json_str;
+//     try {
+//         json_str = user_defined_metadata->dump();
+//     } catch (nlohmann::json::exception const& ex) {
+//         PyErr_Format(
+//                 PyExc_RuntimeError,
+//                 "Failed to serialize the user-defined stream-level metadata "
+//                 "into a JSON string."
+//                 " Error: %s",
+//                 ex.what()
+//         );
+//         return nullptr;
+//     }
+
+//     PyObjectPtr<PyObject> py_metadata_dict{py_utils_parse_json_str(json_str)};
+//     if (nullptr == py_metadata_dict) {
+//         return nullptr;
+//     }
+//     if (false == static_cast<bool>(PyDict_Check(py_metadata_dict.get()))) {
+//         PyErr_SetString(
+//                 PyExc_TypeError,
+//                 "Failed to convert the user-defined stream-level metadata "
+//                 "into a dictionary."
+//         );
+//         return nullptr;
+//     }
+
+//     return py_metadata_dict.release();
+// }
+
+LOG_SURGEON_FFI_METHOD auto PyReaderParser_dealloc(PyReaderParser* self) -> void {
+    self->dealloc();
+    Py_TYPE(self)->tp_free(py_reinterpret_cast<PyObject>(self));
+}
+}  // namespace
+
+auto PyReaderParser::module_level_init(PyObject* py_module) -> bool {
+    // static_assert(std::is_trivially_destructible<PyReaderParser>());
+    auto* type{py_reinterpret_cast<PyTypeObject>(PyType_FromSpec(&PyReaderParser_type_spec))};
+    m_py_type.reset(type);
+    if (nullptr == type) {
+        return false;
+    }
+    return add_python_type(get_py_type(), "ReaderParser", py_module);
+}
+
+auto PyReaderParser::init(PyObject* input_stream, char const* schema_content) -> bool {
+    // TODO FIXME try catch + throw a py exception
+    auto schema{log_surgeon::SchemaParser::try_schema_string(schema_content)};
+    auto parser{std::make_unique<log_surgeon::ReaderParser>(std::move(schema))};
+
+    m_input_stream = input_stream;
+    Py_INCREF(m_input_stream);
+
+    log_surgeon::Reader reader{
+            [&](char* buf, size_t count, size_t& read_to) -> log_surgeon::ErrorCode {
+                // TODO FIXME try catch + throw a py exception
+                PyObject* bytes = PyObject_CallMethod(
+                        m_input_stream,
+                        "read",
+                        "n",
+                        static_cast<Py_ssize_t>(count)
+                );
+
+                if (bytes == nullptr) {
+                    return log_surgeon::ErrorCode::Errno;
+                }
+
+                char* py_buf{};
+                Py_ssize_t size{};
+                if (0 != PyBytes_AsStringAndSize(bytes, &py_buf, &size)) {
+                    Py_DECREF(bytes);
+                    return log_surgeon::ErrorCode::Errno;
+                }
+                read_to = static_cast<size_t>(size);
+
+                std::span<char> const py_span{py_buf, read_to};
+
+                std::copy(py_span.begin(), py_span.end(), buf);
+                Py_DECREF(py_buf);
+
+                if (0 == read_to) {
+                    // PyErr_SetString(
+                    //         get_py_incomplete_stream_error(),
+                    //         get_c_str_from_constexpr_string_view(cDeserializerIncompleteIRError)
+                    // );
+                    return log_surgeon::ErrorCode::EndOfFile;
+                }
+
+                if (read_to < count) {
+                    return log_surgeon::ErrorCode::Truncated;
+                }
+
+                return log_surgeon::ErrorCode::Success;
+            }
+    };
+    parser->reset_and_set_reader(reader);
+
+    m_parser = std::move(parser);
+
+    // TODO: add error handling code?
+    //     if (deserializer_result.has_error()) {
+    //         PyErr_Format(
+    //                 PyExc_RuntimeError,
+    //                 get_c_str_from_constexpr_string_view(cDeserializerCreateErrorFormatStr),
+    //                 deserializer_result.error().message().c_str()
+    //         );
+    //         return false;
+    //     }
+    //     m_deserializer = new (std::nothrow)
+    //             clp::ffi::ir_stream::Deserializer<PyReaderParser::IrUnitHandler>{
+    //                     std::move(deserializer_result.value())
+    //             };
+    //     if (nullptr == m_deserializer) {
+    //         PyErr_SetString(
+    //                 PyExc_RuntimeError,
+    //                 get_c_str_from_constexpr_string_view(cOutOfMemoryError)
+    //         );
+    //         return false;
+    //     }
+    return true;
+}
+
+auto PyReaderParser::dealloc() -> void {
+    std::ignore = m_parser.release();
+}
+
+auto PyReaderParser::done() -> bool {
+    return m_parser->done();
+}
+
+auto PyReaderParser::parse_next_log_event() -> PyObject* {
+    if (done()) {
+        return Py_None;
+    }
+
+    if (log_surgeon::ErrorCode::Success != m_parser->parse_next_event()) {
+        // TODO: throw
+        return Py_None;
+    }
+
+    auto const& log_parser{m_parser->get_log_parser()};
+    auto const& event{log_parser.get_log_event_view()};
+
+    PyObject* py_log_event_module = PyImport_ImportModule("log_event");
+    if (nullptr == py_log_event_module) {
+        return Py_None;
+    }
+
+    PyObject* py_log_event_callable = PyObject_GetAttrString(py_log_event_module, "LogEvent");
+    Py_DECREF(py_log_event_module);
+    if (nullptr == py_log_event_callable) {
+        return Py_None;
+    }
+
+    PyObject* py_log_event = PyObject_CallObject(py_log_event_callable, nullptr);
+    Py_DECREF(py_log_event_callable);
+
+    PyObject* py_log_msg{PyUnicode_FromString(event.to_string().c_str())};
+    if (nullptr == py_log_msg) {
+        Py_DECREF(py_log_event);
+        return Py_None;
+    }
+
+    auto const set_log_msg_result{PyObject_SetAttrString(py_log_event, "_log_message", py_log_msg)};
+    Py_DECREF(py_log_msg);
+    if (-1 == set_log_msg_result) {
+        Py_DECREF(py_log_event);
+        return Py_None;
+    }
+
+    PyObject* py_var_dict = PyObject_GetAttrString(py_log_event, "_var_dict");
+    if (nullptr == py_var_dict) {
+        Py_DECREF(py_log_event);
+        Py_DECREF(py_log_msg);
+        return Py_None;
+    }
+
+    PyObject* py_logtype{PyUnicode_FromString(event.get_logtype().c_str())};
+    if (-1 == PyDict_SetItemString(py_var_dict, "@LogType", py_logtype)) {
+        // TODO: throw
+        return Py_None;
+    }
+
+    auto const& log_buf = event.get_log_output_buffer();
+    auto starting_token_idx{log_buf->has_timestamp() ? 0 : 1};
+    for (auto token_idx{starting_token_idx}; token_idx < log_buf->pos(); token_idx++) {
+        auto token_view{log_buf->get_token(token_idx)};
+        auto const token_type{token_view.m_type_ids_ptr->at(0)};
+
+        if (log_buf->has_delimiters() && (log_buf->has_timestamp() || token_idx > 1)
+            && token_type != static_cast<int>(log_surgeon::SymbolId::TokenUncaughtString)
+            && token_type != static_cast<int>(log_surgeon::SymbolId::TokenNewline))
+        {
+            if (token_view.m_start_pos == token_view.m_buffer_size - 1) {
+                token_view.m_start_pos = 0;
+            } else {
+                token_view.m_start_pos++;
+            }
+        }
+
+        auto const token_name{log_parser.get_id_symbol(token_type)};
+        PyObject* py_token_array{nullptr};
+        auto contains_token_result{PyDict_ContainsString(py_var_dict, token_name.c_str())};
+        if (-1 == contains_token_result) {
+            // TODO: throw
+            return Py_None;
+        }
+        if (1 == contains_token_result) {
+            py_token_array = PyDict_GetItemString(py_var_dict, token_name.c_str());
+        } else {
+            py_token_array = PyList_New(0);
+            if (-1 == PyDict_SetItemString(py_var_dict, token_name.c_str(), py_token_array)) {
+                // TODO: throw
+                return Py_None;
+            }
+        }
+
+        auto token_str{token_view.to_string()};
+        switch (token_type) {
+            case static_cast<int>(log_surgeon::SymbolId::TokenNewline):
+            case static_cast<int>(log_surgeon::SymbolId::TokenUncaughtString): {
+                break;
+            }
+            case static_cast<int>(log_surgeon::SymbolId::TokenInt): {
+                PyObject* py_long{PyLong_FromString(token_str.c_str(), nullptr, 10)};
+                if (nullptr == py_long) {
+                    py_long = PyUnicode_FromString(token_str.c_str());
+                }
+                if (-1 == PyList_Append(py_token_array, py_long)) {
+                    // TODO: throw
+                    return Py_None;
+                }
+                break;
+            }
+            case static_cast<int>(log_surgeon::SymbolId::TokenFloat): {
+                PyObject* py_float{PyFloat_FromDouble(std::stod(token_str))};
+                if (nullptr == py_float) {
+                    py_float = PyUnicode_FromString(token_str.c_str());
+                }
+                if (-1 == PyList_Append(py_token_array, py_float)) {
+                    // TODO: throw
+                    return Py_None;
+                }
+                break;
+            }
+            default: {
+                auto const& lexer{event.get_log_parser().m_lexer};
+                auto capture_ids{lexer.get_capture_ids_from_rule_id(token_type)};
+                PyObject* py_token_str{PyUnicode_FromString(token_str.c_str())};
+                if (false == capture_ids.has_value()) {
+                    if (-1 == PyList_Append(py_token_array, py_token_str)) {
+                        // TODO: throw
+                        return Py_None;
+                    }
+                    break;
+                }
+
+                if (-1 == PyDict_SetItemString(py_var_dict, "@FullMatch", py_token_str)) {
+                    // TODO: throw
+                    return Py_None;
+                }
+
+                for (auto const capture_id : capture_ids.value()) {
+                    auto const register_ids{lexer.get_reg_ids_from_capture_id(capture_id)};
+                    if (false == register_ids.has_value()) {
+                        // TODO: throw
+                        return Py_None;
+                    }
+
+                    auto const [start_reg_id, end_reg_id]{register_ids.value()};
+                    auto const start_positions{token_view.get_reversed_reg_positions(start_reg_id)};
+                    auto const end_positions{token_view.get_reversed_reg_positions(end_reg_id)};
+
+                    auto capture_name{lexer.m_id_symbol.at(capture_id)};
+                    PyObject* py_capture_array{nullptr};
+                    auto contains_capture_result{
+                            PyDict_ContainsString(py_var_dict, capture_name.c_str())
+                    };
+                    if (-1 == contains_capture_result) {
+                        // TODO: throw
+                        return Py_None;
+                    }
+                    if (1 == contains_capture_result) {
+                        py_capture_array = PyDict_GetItemString(py_var_dict, capture_name.c_str());
+                    } else {
+                        py_capture_array = PyList_New(0);
+                        if (-1
+                            == PyDict_SetItemString(
+                                    py_var_dict,
+                                    capture_name.c_str(),
+                                    py_capture_array
+                            ))
+                        {
+                            // TODO: throw
+                            return Py_None;
+                        }
+                    }
+                    for (auto i{0}; i < start_positions.size(); i++) {
+                        auto capture_view{token_view};
+                        capture_view.m_start_pos
+                                = start_positions.at(start_positions.size() - 1 - i);
+                        capture_view.m_end_pos = end_positions.at(i);
+                        PyObject* py_capture{
+                                PyUnicode_FromString(capture_view.to_string().c_str())
+                        };
+                        if (-1 == PyList_Append(py_capture_array, py_capture)) {
+                            // TODO: throw
+                            return Py_None;
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    // TODO: return log event
+    Py_RETURN_NONE;
+}
+
+// auto PyReaderParser::get_user_defined_metadata() const -> nlohmann::json const* {
+//     auto const& metadata{m_deserializer->get_metadata()};
+//     std::string const user_defined_metadata_key{
+//             clp::ffi::ir_stream::cProtocol::Metadata::UserDefinedMetadataKey
+//     };
+//     if (false == metadata.contains(user_defined_metadata_key)) {
+//         return nullptr;
+//     }
+//     return &metadata.at(user_defined_metadata_key);
+// }
+
+// auto PyReaderParser::handle_log_event(clp::ffi::KeyValuePairLogEvent&& log_event) -> IRErrorCode
+// {
+//     if (has_unreleased_deserialized_log_event()) {
+//         // This situation may occur if the deserializer methods return an error
+//         // after the last successful call to `handle_log_event`. If the user
+//         // resolves the error and invokes the deserializer methods again, the
+//         // underlying deserialized log event from the previous failed calls remains
+//         // unreleased. To prevent a memory leak, we must free the associated memory
+//         // by clearing the last deserialized log event.
+//         clear_deserialized_log_event();
+//     }
+//     m_deserialized_log_event
+//             = new (std::nothrow) clp::ffi::KeyValuePairLogEvent{std::move(log_event)};
+//     if (nullptr == m_deserialized_log_event) {
+//         // TODO: Set this to a proper error code when user-defined error code is
+//         // supported.
+//         return IRErrorCode::IRErrorCode_Eof;
+//     }
+//     return IRErrorCode::IRErrorCode_Success;
+// }
+
+// auto PyReaderParser::handle_incomplete_stream_error() -> bool {
+//     if (m_allow_incomplete_stream) {
+//         handle_end_of_stream();
+//         return true;
+//     }
+//     PyErr_SetString(
+//             PyReaderParserBuffer::get_py_incomplete_stream_error(),
+//             get_c_str_from_constexpr_string_view(cDeserializerIncompleteIRError)
+//     );
+//     return false;
+// }
+}  // namespace log_surgeon_ffi

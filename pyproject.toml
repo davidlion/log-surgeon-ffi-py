@@ -1,0 +1,127 @@
+[project]
+name = "log-surgeon-ffi"
+version = "0.1.0"
+description = "Python FFI to y-scope/log-surgeon."
+license = { text = "Apache License 2.0" }
+authors = [
+    { name="y-scope", email="info@yscope.com" },
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/y-scope/log-surgeon-ffi-py"
+"Bug Tracker" = "https://github.com/y-scope/log-surgeon-ffi-py/issues"
+
+[build-system]
+build-backend = "scikit_build_core.build"
+requires = ["scikit-build-core >= 0.10.7"]
+
+[dependency-groups]
+dev = [
+    "gersemi>=0.16.2",
+    "cibuildwheel>=2.16.2",
+    "clang-format>=19.1.6",
+    "clang-tidy>=19.1.0",
+    "mypy>=1.16.0",
+    "ruff>=0.11.12",
+    "yamllint>=1.35.1",
+]
+
+# [tool.cibuildwheel]
+# # NOTE: The wheels to be built (and skipped) must be kept in-sync with the GitHub workflow. The GH
+# # workflow doesn't use pyproject.toml to determine which wheels to build, but instead uses
+# # environment variables so that it can build the wheels in parallel jobs.
+
+# # Use `musllinux_1_2` to support C++20 compilation
+# musllinux-aarch64-image = "musllinux_1_2"
+# musllinux-i686-image = "musllinux_1_2"
+# musllinux-ppc64le-image = "musllinux_1_2"
+# musllinux-s390x-image = "musllinux_1_2"
+# musllinux-x86_64-image = "musllinux_1_2"
+
+# skip = "pp*"
+
+# test-command = [
+#   "python -m unittest discover --failfast --verbose --start-directory={package}/tests"
+# ]
+# test-requires = [
+#     "smart_open==6.4.0"
+# ]
+# test-skip = [
+#     "cp39-*",
+#     "cp310-*",
+#     "*-*linux_i686",
+# ]
+
+# [tool.cibuildwheel.linux]
+# archs = ["auto", "aarch64"]
+
+# [tool.cibuildwheel.macos]
+# archs = ["x86_64", "universal2", "arm64"]
+
+# [tool.cibuildwheel.macos.environment]
+# # We need 10.15 since CLP core uses std::from_chars.
+# MACOSX_DEPLOYMENT_TARGET = "10.15"
+
+# [tool.cibuildwheel.windows]
+# archs = ["AMD64"]
+
+[tool.mypy]
+strict = true
+
+# Additional output
+pretty = true
+show_error_code_links = true
+show_error_context = true
+show_error_end = true
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN401", # Allow using Any type for function signatures
+    "COM812",  # Redundant and conflicts with ruff format
+    "D203",  # No blank line before docstrings (D211)
+    "D205",  # Breaks if summary is larger than one line due to wrapping or if no summary exists
+    "D212",  # Enforce docstring summary line on the next line after quotes (D213)
+    "D400",  # First line of docstrings may not end in period
+    "D401",  # Docstrings should be written in present tense (not imperative)
+    "D415",  # First line of docstrings may not end in a period, question mark, or exclamation point
+    "FBT",  # Allow bool positional parameters since other value positions are allowed
+    "FIX002",  # Allow todo statements
+    "PERF401",  # Allow for loops when creating lists
+    "PERF403",  # Allow for loops when creating dicts
+    "S311",  # Allow usage of `random` package
+    "S603", # Automatically trust inputs of subprocess execution
+    "SIM102",  # Allow collapsible if statements for readability
+    "SIM300", # Skip Yoda-condition format fixes
+    "TD002",  # Author unnecessary for todo statement
+    "TD003",  # Issue link unnecessary for todo statement
+    "UP015",  # Explicit open modes are helpful
+]
+isort.order-by-type = false
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",  # Allow usage of pytest `assert`
+    "TC003",  # Ignore performance overhead of imports only used for type checking
+]
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 100
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+wheel.packages = [
+    "src/log_surgeon",
+    "src/log_surgeon_ffi",
+]

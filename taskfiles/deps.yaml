@@ -1,0 +1,88 @@
+version: "3"
+
+includes:
+  utils:
+    internal: true
+    taskfile: "../tools/yscope-dev-utils/exports/taskfiles/utils/utils.yaml"
+
+vars:
+  G_DEPS_DIR: "{{.G_BUILD_DIR}}/deps"
+
+  # This path must be kept in-sync with its usage in CMakeLists.txt and examples/CMakeLists.txt.
+  G_DEPS_CMAKE_SETTINGS_DIR: "{{.G_DEPS_DIR}}/cmake-settings"
+
+  # These names must match their CMake package names.
+  G_FMT_CMAKE_NAME: "fmt"
+  G_GSL_CMAKE_NAME: "Microsoft.GSL"
+
+tasks:
+  install-all:
+    run: "once"
+    cmds:
+      - task: "utils:cmake:install-deps-and-generate-settings"
+        vars:
+          CMAKE_SETTINGS_DIR: "{{.G_DEPS_CMAKE_SETTINGS_DIR}}"
+          DEP_TASK: "install-all-parallel"
+
+  install-all-parallel:
+    internal: true
+    run: "once"
+    deps:
+      - "log-surgeon"
+
+  log-surgeon:
+    internal: true
+    run: "once"
+    deps:
+      - "fmt"
+      - "microsoft.gsl"
+    cmds:
+      - task: "utils:cmake:install-remote-tar"
+        vars:
+          CMAKE_GEN_ARGS:
+            - "-C {{.G_DEPS_CMAKE_SETTINGS_DIR}}/{{.G_FMT_CMAKE_NAME}}.cmake"
+            - "-C {{.G_DEPS_CMAKE_SETTINGS_DIR}}/{{.G_GSL_CMAKE_NAME}}.cmake"
+            - "-DCMAKE_BUILD_TYPE=Release"
+            - "-DCMAKE_INSTALL_MESSAGE=LAZY"
+            - "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+            - "-Dlog_surgeon_BUILD_TESTING=OFF"
+          CMAKE_PACKAGE_NAME: "log_surgeon"
+          CMAKE_SETTINGS_DIR: "{{.G_DEPS_CMAKE_SETTINGS_DIR}}"
+          TAR_SHA256: "69a99e0804a52c6b6397c5e7eabecc9bb4915d0145632c66fc63ad13678ff56a"
+          TAR_URL: "https://github.com/y-scope/log-surgeon/archive/a722d07.tar.gz"
+          WORK_DIR: "{{.G_DEPS_DIR}}"
+
+  fmt:
+    internal: true
+    run: "once"
+    cmds:
+      - task: "utils:cmake:install-remote-tar"
+        vars:
+          CMAKE_GEN_ARGS:
+            - "-DCMAKE_BUILD_TYPE=Release"
+            - "-DCMAKE_INSTALL_MESSAGE=LAZY"
+            - "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+            - "-DFMT_DOC=OFF"
+            - "-DFMT_TEST=OFF"
+          CMAKE_PACKAGE_NAME: "{{.G_FMT_CMAKE_NAME}}"
+          CMAKE_SETTINGS_DIR: "{{.G_DEPS_CMAKE_SETTINGS_DIR}}"
+          TAR_SHA256: "bc23066d87ab3168f27cef3e97d545fa63314f5c79df5ea444d41d56f962c6af"
+          TAR_URL: "https://github.com/fmtlib/fmt/archive/refs/tags/11.2.0.tar.gz"
+          WORK_DIR: "{{.G_DEPS_DIR}}"
+
+  microsoft.gsl:
+    internal: true
+    run: "once"
+    cmds:
+      - task: "utils:cmake:install-remote-tar"
+        vars:
+          CMAKE_GEN_ARGS:
+            - "-DCMAKE_BUILD_TYPE=Release"
+            - "-DCMAKE_INSTALL_MESSAGE=LAZY"
+            - "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+            - "-DGSL_TEST=OFF"
+          CMAKE_PACKAGE_NAME: "{{.G_GSL_CMAKE_NAME}}"
+          CMAKE_SETTINGS_DIR: "{{.G_DEPS_CMAKE_SETTINGS_DIR}}"
+          TAR_SHA256: "f0e32cb10654fea91ad56bde89170d78cfbf4363ee0b01d8f097de2ba49f6ce9"
+          TAR_URL: "https://github.com/microsoft/GSL/archive/refs/tags/v4.0.0.tar.gz"
+          WORK_DIR: "{{.G_DEPS_DIR}}"

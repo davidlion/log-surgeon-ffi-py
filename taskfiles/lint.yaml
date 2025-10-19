@@ -1,0 +1,166 @@
+version: "3"
+
+includes:
+  deps:
+    internal: true
+    taskfile: "deps.yaml"
+  log-surgeon-ffi:
+    internal: true
+    taskfile: "log-surgeon-ffi.yaml"
+  utils:
+    internal: true
+    taskfile: "../tools/yscope-dev-utils/exports/taskfiles/utils/utils.yaml"
+
+vars:
+  # General linting variables
+  G_UV_VENV_DIR: "{{.ROOT_DIR}}/.venv"
+
+  G_LOG_SURGEON_FFI_DIR: "{{.ROOT_DIR}}/src/log_surgeon_ffi"
+  G_LOG_SURGEON_DIR: "{{.ROOT_DIR}}/src/log_surgeon"
+
+  # Utils directories
+  G_UTILS_EXPORTS_DIR: "{{.ROOT_DIR}}/tools/yscope-dev-utils/exports"
+  G_UTILS_CONFIGS_DIR: "{{.G_UTILS_EXPORTS_DIR}}/lint-configs"
+  G_UTILS_YSTDLIB_PY_DIR: "{{.G_UTILS_EXPORTS_DIR}}/ystdlib-py"
+
+  # Anchors for `sources` fields
+  G_LOG_SURGEON_FFI_SOURCES: &log_surgeon_ffi_sources
+    - "{{.G_LOG_SURGEON_FFI_DIR}}/.clang-format"
+    - "{{.G_LOG_SURGEON_FFI_DIR}}/**/*"
+    - "{{.ROOT_DIR}}/CMakeLists.txt"
+    - "{{.TASKFILE}}"
+
+tasks:
+  check:
+    cmds:
+      - task: "check-cmake"
+      - task: "check-cpp"
+      - task: "check-py"
+      - task: "check-yaml"
+
+  check-cmake:
+    cmds:
+      - task: "gersemi"
+        vars:
+          FLAGS: "--check"
+
+  check-cpp:
+    cmds:
+      - task: "check-cpp-format"
+      - task: "check-cpp-static"
+
+  check-cpp-format:
+    cmds:
+      - task: "cpp-format"
+        vars:
+          FLAGS: ["--dry-run"]
+
+  check-cpp-static:
+    # NOTE: We alias the fix task until we determine which clang-tidy fixes can be applied safely.
+    aliases: ["fix-cpp-static"]
+    vars:
+      BUILD_DIR: "{{.G_LOG_SURGEON_FFI_DEBUG_BUILD_DIR}}"
+    sources: *log_surgeon_ffi_sources
+    deps:
+      - task: "log-surgeon-ffi:generate"
+        vars:
+          BUILD_DIR: "{{.BUILD_DIR}}"
+          BUILD_TYPE: "debug"
+    cmds:
+      - "uv sync"  # can remove when clang-tidy uses uv
+      - task: "utils:cpp-lint:clang-tidy-find"
+        vars:
+          FLAGS:
+            - "--config-file '{{.G_UTILS_CONFIGS_DIR}}/.clang-tidy'"
+            - "-p '{{.BUILD_DIR}}'"
+          OUTPUT_DIR: "{{.G_BUILD_DIR}}/lint-clang-tidy"
+          ROOT_PATHS:
+            - "{{.G_LOG_SURGEON_FFI_DIR}}"
+          VENV_DIR: "{{.G_UV_VENV_DIR}}"
+
+  check-py:
+    cmds:
+      - task: "py"
+        vars:
+          RUFF_FORMAT_FLAGS: "--diff"
+
+  check-yaml:
+    aliases: ["fix-yaml"]
+    cmd: >-
+      uv run --project "{{.G_UTILS_YSTDLIB_PY_DIR}}" pyfind
+      "{{.ROOT_DIR}}"
+      --exclude ".venv/**/*"
+      --exclude "build/**/*"
+      --exclude "tools/**/*"
+      --filename "*.yaml"
+      | xargs uv run yamllint
+      --config-file "{{.G_UTILS_CONFIGS_DIR}}/.yamllint.yml"
+      --strict
+
+  fix:
+    cmds:
+      - task: "fix-cmake"
+      - task: "fix-cpp"
+      - task: "fix-py"
+      - task: "fix-yaml"
+
+  fix-cmake:
+    cmds:
+      - task: "gersemi"
+        vars:
+          FLAGS: "--in-place"
+
+  fix-cpp:
+    cmds:
+      - task: "fix-cpp-format"
+      - task: "fix-cpp-static"
+
+  fix-cpp-format:
+    cmds:
+      - task: "cpp-format"
+        vars:
+          FLAGS: ["-i"]
+
+  fix-py:
+    cmds:
+      - task: "py"
+        vars:
+          RUFF_CHECK_FLAGS: "--fix"
+
+  cpp-format:
+    internal: true
+    label: "{{.TASK}}:{{.FLAGS}}"
+    requires:
+      vars: ["FLAGS"]
+    sources: *log_surgeon_ffi_sources
+    cmds:
+      - "uv sync"  # can remove when clang-tidy uses uv
+      - task: "utils:cpp-lint:clang-format"
+        vars:
+          FLAGS:
+            ref: ".FLAGS"
+          ROOT_PATHS:
+            - "{{.G_LOG_SURGEON_FFI_DIR}}"
+          VENV_DIR: "{{.G_UV_VENV_DIR}}"
+
+  gersemi:
+    internal: true
+    label: "{{.TASK}}:{{.FLAGS}}"
+    requires:
+      vars: ["FLAGS"]
+    deps: ["deps:install-all"]
+    cmd: >-
+      uv run --project "{{.G_UTILS_YSTDLIB_PY_DIR}}" pyfind
+      "{{.ROOT_DIR}}"
+      --exclude "build/**/*"
+      --exclude "tools/**/*"
+      --filename "CMakeLists.txt"
+      --filename "*.cmake"
+      | xargs uv run gersemi {{.FLAGS}}
+
+  py:
+    internal: true
+    cmd: |-
+      uv run mypy "{{.G_LOG_SURGEON_DIR}}"
+      uv run ruff check {{.RUFF_CHECK_FLAGS}} "{{.G_LOG_SURGEON_DIR}}"
+      uv run ruff format {{.RUFF_FORMAT_FLAGS}} "{{.G_LOG_SURGEON_DIR}}"
