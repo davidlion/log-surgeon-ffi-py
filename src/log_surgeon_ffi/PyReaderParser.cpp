@@ -20,6 +20,9 @@
 #include <type_traits>
 #include <utility>
 
+
+#include <iostream>
+
 namespace log_surgeon_ffi {
 namespace {
 /**
@@ -363,6 +366,7 @@ auto PyReaderParser::done() -> bool {
 }
 
 auto PyReaderParser::parse_next_log_event() -> PyObject* {
+    std::cerr << "parse_next_log_event: start" << "\n";
     if (done()) {
         return Py_None;
     }
@@ -415,6 +419,9 @@ auto PyReaderParser::parse_next_log_event() -> PyObject* {
         return Py_None;
     }
 
+    std::cerr << "log message: " << event.to_string() << "\n";
+    std::cerr << "log type: " << event.get_logtype() << "\n";
+
     auto const& log_buf = event.get_log_output_buffer();
     auto starting_token_idx{log_buf->has_timestamp() ? 0 : 1};
     for (auto token_idx{starting_token_idx}; token_idx < log_buf->pos(); token_idx++) {
@@ -434,12 +441,14 @@ auto PyReaderParser::parse_next_log_event() -> PyObject* {
 
         auto const token_name{log_parser.get_id_symbol(token_type)};
         PyObject* py_token_name{PyUnicode_FromString(token_name.c_str())};
-        if (nullptr != py_token_name) {
+        if (nullptr == py_token_name) {
+            std::cerr << "failed token name" "\n";
             return Py_None;
         }
         PyObject* py_token_array{nullptr};
         auto contains_token_result{PyDict_Contains(py_var_dict, py_token_name)};
         if (-1 == contains_token_result) {
+            std::cerr << "failed contains" "\n";
             // TODO: throw
             return Py_None;
         }
@@ -448,10 +457,13 @@ auto PyReaderParser::parse_next_log_event() -> PyObject* {
         } else {
             py_token_array = PyList_New(0);
             if (-1 == PyDict_SetItem(py_var_dict, py_token_name, py_token_array)) {
+                std::cerr << "failed setitem" "\n";
                 // TODO: throw
                 return Py_None;
             }
         }
+
+        std::cerr << "token name: " << token_name << " token: " << token_view.to_string() << "\n";
 
         auto token_str{token_view.to_string()};
         switch (token_type) {
@@ -547,9 +559,7 @@ auto PyReaderParser::parse_next_log_event() -> PyObject* {
             }
         }
     }
-
-    // TODO: return log event
-    Py_RETURN_NONE;
+    return py_log_event;
 }
 
 // auto PyReaderParser::get_user_defined_metadata() const -> nlohmann::json const* {
